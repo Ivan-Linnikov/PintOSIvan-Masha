@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "fpr_arith.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -89,6 +90,9 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+    int wakeupattick;                   /* memorize the wake up tick time */
+    int nice;     
+    FPReal recent_cpu;                      
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -106,6 +110,12 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+
+bool compare_threads_priority(const struct list_elem * elem1, const struct list_elem * elem2, void * aux);
+void update_recent_cpu (struct thread * th);
+void update_priority (struct thread * th);
+void update_load_avg(int threads_number);
+
 
 void thread_init (void);
 void thread_start (void);
@@ -139,3 +149,4 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 #endif /* threads/thread.h */
+
