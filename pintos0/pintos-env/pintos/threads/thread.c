@@ -44,10 +44,10 @@ static struct thread *initial_thread;
 static struct lock tid_lock;
 
 /* Maximal and minimal nice values. */
-#define NICE_MIN -20
-#define NICE_MAX 20
+#define NMIN -20
+#define NMAX 20
 
-/* Global variable for storing the system load. */
+/* req variable. */
 FPReal load_avg;
 
 /* Stack frame for kernel_thread(). */
@@ -274,7 +274,6 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
-
   tid = t->tid = allocate_tid ();
 
   /* Prepare thread for first run by initializing its stack.
@@ -302,7 +301,6 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  /* If new thread's priority is bigger than the current thread's priority call thread_yield() */
   if (thread_get_priority() < t->priority) {
     thread_yield();
   }
@@ -442,15 +440,13 @@ void
 thread_set_priority (int new_priority) 
 {
   if (!thread_mlfqs) {
-    // msg("entered critical section");
     thread_current()->priority = new_priority;
-    enum intr_level old_lvl = intr_disable();
-    // msg("CHANGED PRIORITY TO: %d", thread_current()->priority);
-    if(new_priority < list_entry(list_begin(&ready_list), struct thread, elem)->priority) {
-      // msg("YIELD THE THREAD");
+    enum intr_level old_level = intr_disable();
+    int prev = list_entry(list_begin(&ready_list), struct thread, elem)->priority;
+    if(new_priority < prev) {
       thread_yield();
     }
-    intr_set_level(old_lvl);
+    intr_set_level(old_level);
   }
 }
 
@@ -465,17 +461,19 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice) 
 {
-  if (thread_mlfqs && NICE_MIN <= nice && nice <= NICE_MAX) {
+  if (thread_mlfqs && NMIN <= nice && nice <= NMAX) {
     thread_current()->nice = nice;
     update_priority(thread_current());
-    enum intr_level old_lvl = intr_disable();
-    /* Check for a higher thread priority in the ready list */
+    enum intr_level old_level = intr_disable();
     if (!list_empty(&ready_list)) {
-      if (thread_current()->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority) {
+      int current = thread_current()->priority;
+      int top = list_entry(list_front(&ready_list), struct thread, elem)->priority;
+
+      if (current < top) {
         thread_yield();
       }
     }
-    intr_set_level(old_lvl);
+    intr_set_level(old_level);
   }
 }
 
@@ -483,27 +481,21 @@ thread_set_nice (int nice)
 int
 thread_get_nice (void) 
 {
-  if (thread_mlfqs) {
-    return thread_current()->nice;
-  }
+  return thread_mlfqs ? thread_current()->nice : NULL;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  if (thread_mlfqs) {
-    return FPR_TO_INT(FPR_MUL_INT(load_avg, 100));
-  }
+  return thread_mlfqs ? FPR_TO_INT(FPR_MUL_INT(load_avg, 100)) : NULL;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  if (thread_mlfqs) {
-    return FPR_TO_INT(FPR_MUL_INT(thread_current()->recent_cpu, 100));
-  }
+  return thread_mlfqs ? FPR_TO_INT(FPR_MUL_INT(thread_current()->recent_cpu, 100)) : NULL;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -618,14 +610,12 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  enum intr_level old_lvl = intr_disable();
-  if (list_empty (&ready_list)) {
+  enum intr_level old_level = intr_disable();
+  if (list_empty(&ready_list)) {
     return idle_thread;
-  } else {
-    struct thread * th = list_entry (list_pop_front (&ready_list), struct thread, elem);
-    intr_set_level(old_lvl);
-    return th;
   }
+  intr_set_level(old_level);
+  return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
