@@ -1,3 +1,4 @@
+/* Processes syscall.c */
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -18,13 +19,16 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#define LOADER_ARGS_LEN 64 // Maximum number of arguments supported
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 /* Starts a new thread running a user program loaded from
-   FILENAME.  The new thread may be scheduled (and may even exit)
-   before process_execute() returns.  Returns the new process's
-   thread id, or TID_ERROR if the thread cannot be created. */
+   FILE_NAME.  The new thread may be scheduled (and may even
+   exit) before process_execute() returns.  Returns the new
+   process's thread id, or TID_ERROR if the thread cannot be
+   created. */
 tid_t
 process_execute (const char *file_name) 
 {
@@ -38,8 +42,12 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* Tokenize the file name to extract arguments */
+  char *save_ptr;
+  char *executable_name = strtok_r(file_name, " ", &save_ptr);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (executable_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -48,7 +56,7 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *file_name_) 
 {
   char *file_name = file_name_;
   struct intr_frame if_;
@@ -76,6 +84,82 @@ start_process (void *file_name_)
   NOT_REACHED ();
 }
 
+/* A thread function that loads a user process and starts it
+   running. */
+static void
+start_process (void *file_name_)
+{
+  char *file_name = file_name_;
+  struct intr_frame if_;
+  bool success;
+
+  /* Initialize interrupt frame and load executable. */
+  memset (&if_, 0, sizeof if_);
+  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+  if_.cs = SEL_UCSEG;
+  if_.eflags = FLAG_IF | FLAG_MBS;
+  success = load (file_name, &if_.eip, &if_.esp);
+
+  /* Parse arguments and push onto the stack. */
+  char *token, *save_ptr;
+  char *args[LOADER_ARGS_LEN];
+  int argc = 0;
+
+  // Tokenize the command line
+  for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr)) {
+    args[argc++] = token;
+    if (argc >= LOADER_ARGS_LEN)
+      break;
+  }
+
+  // Push arguments onto the stack
+  int argv_addr[LOADER_ARGS_LEN];
+  int i;
+  for (i = argc - 1; i >= 0; i--) {
+    if_.esp -= strlen(args[i]) + 1;
+    memcpy(if_.esp, args[i], strlen(args[i]) + 1);
+    argv_addr[i] = (int)if_.esp;
+  }
+
+  // Word-align
+  while ((int)if_.esp % 4 != 0) {
+    if_.esp--;
+    *(uint8_t *)if_.esp = 0;
+  }
+
+  // Null-terminate argv
+  if_.esp -= sizeof(int);
+  *(int *)if_.esp = 0;
+
+  // Push addresses of arguments onto the stack
+  for (i = argc - 1; i >= 0; i--) {
+    if_.esp -= sizeof(int);
+    *(int *)if_.esp = argv_addr[i];
+  }
+
+  // Push argv
+  int argv = (int)if_.esp;
+  if_.esp -= sizeof(int);
+  *(int *)if_.esp = argv;
+
+  // Push argc
+  if_.esp -= sizeof(int);
+  *(int *)if_.esp = argc;
+
+  if (!success) 
+    thread_exit ();
+
+  /* Start the user process by simulating a return from an
+     interrupt, implemented by intr_exit (in
+     threads/intr-stubs.S).  Because intr_exit takes all of its
+     arguments on the stack in the form of a `struct intr_frame',
+     we just point the stack pointer (%esp) to our stack frame
+     and jump to it. */
+  asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
+  NOT_REACHED ();
+}
+
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -88,7 +172,24 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  struct thread *cur = thread_current ();
+  struct list_elem *e;
+
+  /* Iterate over the list of child processes */
+  for (e = list_begin (&cur->child_list); e != list_end (&cur->child_list);
+       e = list_next (e))
+    {
+      struct child_process *cp = list_entry (e, struct child_process, elem);
+      if (cp->tid == child_tid) // If the child process is found
+        {
+          sema_down (&cp->sema); // Block the parent thread
+          int status = cp->exit_status; // Get the exit status of the child
+          list_remove (e); // Remove the child from the parent's child list
+          free (cp); // Free the child process struct
+          return status; // Return the exit status of the child
+        }
+    }
+  return -1; // If the child process is not found, return -1
 }
 
 /* Free the current process's resources. */
