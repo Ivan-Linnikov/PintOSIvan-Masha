@@ -23,10 +23,6 @@ enum
     SYS_MMAP,                   /* Map a file into memory. */
     SYS_MUNMAP,                 /* Remove a memory mapping. */
 
-    /* Repurpose an unused system call number for printf() */
-    SYS_PRINTF,                 /* Print formatted output to stdout. */
-
-    
     /* Project 4 only. */
     SYS_CHDIR,                  /* Change the current directory. */
     SYS_MKDIR,                  /* Create a directory. */

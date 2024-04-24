@@ -159,8 +159,6 @@ thread_init (void)
   list_init (&ready_list);
   list_init(&sleep_list);
   list_init (&all_list);
-  list_init(&thread_current()->child_list); // Initialize the child_list for the main thread
-
   if (thread_mlfqs) {
     load_avg = INT_TO_FPR(0);
   }

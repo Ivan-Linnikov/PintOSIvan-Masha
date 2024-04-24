@@ -92,13 +92,10 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     int wakeupattick;                   /* memorize the wake up tick time */
     int nice;     
-    FPReal recent_cpu;  
-    
-   int exit_status;                    /* Exit status of the thread */                     
+    FPReal recent_cpu;                      
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    struct list child_list; // List of child processes
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

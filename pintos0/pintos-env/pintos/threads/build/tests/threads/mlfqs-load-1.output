@@ -3,14 +3,23 @@ bochs -q
 PiLo hda1
 Loading..........
 Kernel command line: -q -mlfqs run mlfqs-load-1
-Kernel PANIC at ../../threads/thread.c:371 in thread_current(): assertion `is_thread (t)' failed.
-Call stack: 0xc002843e.
-The `backtrace' program can make call stacks useful.
-Read "Backtraces" in the "Debugging Tools" chapter
-of the Pintos documentation for more information.
-Timer: 0 ticks
-Thread: 0 idle ticks, 0 kernel ticks, 0 user ticks
-Console: 390 characters output
+Pintos booting with 4,096 kB RAM...
+383 pages available in kernel pool.
+383 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+Boot complete.
+Executing 'mlfqs-load-1':
+(mlfqs-load-1) begin
+(mlfqs-load-1) spinning for up to 45 seconds, please wait...
+(mlfqs-load-1) load average rose to 0.5 after 42 seconds
+(mlfqs-load-1) sleeping for another 10 seconds, please wait...
+(mlfqs-load-1) load average fell back below 0.5 (to 0.43)
+(mlfqs-load-1) PASS
+(mlfqs-load-1) end
+Execution of 'mlfqs-load-1' complete.
+Timer: 5326 ticks
+Thread: 1000 idle ticks, 4328 kernel ticks, 0 user ticks
+Console: 646 characters output
 Keyboard: 0 keys pressed
 Powering off...
 ========================================================================
